@@ -11,6 +11,8 @@
         .error  { color: crimson; }
         .oculto { display: none; }
         .orden  { margin: 1rem 0; }
+        #btn-mas { margin-top: 1rem; }
+        footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ccc; color: #555; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -36,6 +38,9 @@
         </select>
     </div>
     <ul id="repos"></ul>
+    <button type="button" id="btn-mas" class="oculto">Cargar más</button>
+
+    <footer id="pie">Peticiones restantes: aún sin consultar</footer>
 
     <script src="app.js"></script>
 </body>
