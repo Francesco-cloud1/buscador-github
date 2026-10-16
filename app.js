@@ -1,12 +1,21 @@
 const API = 'https://api.github.com';
 
-const form   = document.querySelector('#form-buscar');
-const input  = document.querySelector('#input-usuario');
-const boton  = document.querySelector('#btn-buscar');
+const form = document.querySelector('#form-buscar');
+const input = document.querySelector('#input-usuario');
+const boton = document.querySelector('#btn-buscar');
 const estado = document.querySelector('#estado');
 const perfil = document.querySelector('#perfil');
 const titulo = document.querySelector('#titulo-repos');
-const repos  = document.querySelector('#repos');
+const repos = document.querySelector('#repos');
+
+// Actividad 2: nuevos elementos
+const orden = document.querySelector('#orden');
+const bloqueOrden = document.querySelector('#bloque-orden');
+const tituloLenguajes = document.querySelector('#titulo-lenguajes');
+const listaLenguajes = document.querySelector('#lenguajes');
+
+// Usuario cuya búsqueda se mostró con éxito (para reordenar sin volver a escribirlo)
+let usuarioActual = '';
 
 // 1. Petición genérica con traducción de errores HTTP
 async function obtenerJSON(url) {
@@ -17,6 +26,12 @@ async function obtenerJSON(url) {
     }
     if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
     return res.json();
+}
+
+// Construye la URL de repositorios con URLSearchParams
+function urlRepos(usuario, opciones) {
+    const params = new URLSearchParams(opciones);
+    return `${API}/users/${usuario}/repos?${params}`;
 }
 
 // 2. Pintar el perfil
@@ -59,34 +74,92 @@ function mostrarRepos(lista) {
         repos.append(li);
     });
     titulo.classList.remove('oculto');
+    bloqueOrden.classList.remove('oculto');
 }
 
-// 4. Evento submit: dos peticiones en paralelo
+// 4. Actividad 2: contar repositorios por lenguaje
+function contarLenguajes(lista) {
+    const conteo = {};
+    lista.forEach(r => {
+        const lenguaje = r.language ?? 'Sin lenguaje';
+        conteo[lenguaje] = (conteo[lenguaje] || 0) + 1;
+    });
+    // Convertir a arreglo [lenguaje, cantidad] y ordenar de mayor a menor
+    return Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+}
+
+function mostrarLenguajes(lista) {
+    const resumen = contarLenguajes(lista);
+    listaLenguajes.replaceChildren();
+    resumen.forEach(([lenguaje, cantidad]) => {
+        const li = document.createElement('li');
+        const palabra = cantidad === 1 ? 'repositorio' : 'repositorios';
+        li.textContent = `${lenguaje}: ${cantidad} ${palabra}`;
+        listaLenguajes.append(li);
+    });
+    tituloLenguajes.classList.remove('oculto');
+}
+
+function ocultarResultados() {
+    perfil.classList.add('oculto');
+    titulo.classList.add('oculto');
+    tituloLenguajes.classList.add('oculto');
+    bloqueOrden.classList.add('oculto');
+    repos.innerHTML = '';
+    listaLenguajes.innerHTML = '';
+}
+
+// 5. Evento submit: tres peticiones en paralelo
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const usuario = encodeURIComponent(input.value.trim());
     if (!usuario) return;
 
-    const params = new URLSearchParams({ sort: 'updated', per_page: 5 });
     boton.disabled = true;
     estado.className = '';
     estado.textContent = 'Buscando...';
 
     try {
-        const [datosUsuario, datosRepos] = await Promise.all([
+        const [datosUsuario, datosRepos, todosLosRepos] = await Promise.all([
             obtenerJSON(`${API}/users/${usuario}`),
-            obtenerJSON(`${API}/users/${usuario}/repos?${params}`)
+            // los 5 repositorios, según el orden elegido en el <select>
+            obtenerJSON(urlRepos(usuario, { sort: orden.value, per_page: 5 })),
+            // hasta 100 repositorios, solo para contar lenguajes
+            obtenerJSON(urlRepos(usuario, { per_page: 100 }))
         ]);
+        usuarioActual = usuario;
         mostrarPerfil(datosUsuario);
         mostrarRepos(datosRepos);
+        mostrarLenguajes(todosLosRepos);
         estado.textContent = '';
     } catch (error) {
-        perfil.classList.add('oculto');
-        titulo.classList.add('oculto');
-        repos.innerHTML = '';
+        usuarioActual = '';
+        ocultarResultados();
         estado.className = 'error';
         estado.textContent = error.message;
     } finally {
         boton.disabled = false;
+    }
+});
+
+// 6. Actividad 2: cambiar el orden vuelve a pedir solo la lista de repositorios
+orden.addEventListener('change', async () => {
+    if (!usuarioActual) return;
+
+    estado.className = '';
+    estado.textContent = 'Ordenando...';
+    orden.disabled = true;
+
+    try {
+        const datos = await obtenerJSON(
+            urlRepos(usuarioActual, { sort: orden.value, per_page: 5 })
+        );
+        mostrarRepos(datos);
+        estado.textContent = '';
+    } catch (error) {
+        estado.className = 'error';
+        estado.textContent = error.message;
+    } finally {
+        orden.disabled = false;
     }
 });
